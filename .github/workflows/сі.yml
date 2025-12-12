@@ -112,18 +112,17 @@ jobs:
             ci
             bug
 
-  slack:
+   slack:
     runs-on: ubuntu-latest
     needs: [unit, lint, integration, acceptance, docker]
     if: always()
     steps:
-      - name: Slack notify (only if webhook provided)
-        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
+      - name: Slack notify
         uses: slackapi/slack-github-action@v1
         with:
           payload: |
             {
-              "text": "CI for *${{ github.repository }}* finished: *${{ needs.docker.result }}* (ref `${{ github.ref_name }}`) - ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "text": "CI for *${{ github.repository }}* finished: *${{ needs.docker.result }}* (ref `${{ github.ref_name }}`)\n${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
