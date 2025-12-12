@@ -2,12 +2,12 @@ name: CI
 
 on:
   push:
-    branches: ["main"]         # тригер 1
+    branches: ["main"]
   pull_request:
-    branches: ["main"]         # тригер 2
+    branches: ["main"]
   schedule:
-    - cron: "0 3 * * *"        # тригер 3
-  workflow_dispatch:           # ручний
+    - cron: "0 3 * * *"
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -18,20 +18,30 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: [18, 20]         # matrix = ще “ресурс”
+        node: [18, 20]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-      - run: npm ci || npm i
-      - run: npm run test:unit
+
+      - name: Install deps
+        run: npm ci || npm i
+
+      - name: Unit tests
+        run: npm run test:unit
+
       - name: Save unit logs
         if: always()
-        run: echo "unit ok on node=${{ matrix.node }}" > unit-log.txt
-      - uses: actions/upload-artifact@v4
+        run: echo "unit finished on node=${{ matrix.node }} result=${{ job.status }}" > unit-log.txt
+
+      - name: Upload unit logs
         if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: unit-logs-node-${{ matrix.node }}
           path: unit-log.txt
@@ -74,7 +84,7 @@ jobs:
 
   docker:
     runs-on: ubuntu-latest
-    needs: [acceptance]
+    needs: acceptance
     permissions:
       contents: read
       packages: write
@@ -88,20 +98,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build & push
+      - name: Build & push image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
-            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ghcr.io/${{ env.IMAGE_NAME }}:latest
 
   issue-on-fail:
     runs-on: ubuntu-latest
     needs: [unit, lint, integration, acceptance, docker]
     if: always()
+    permissions:
+      issues: write
+      contents: read
     steps:
+      - uses: actions/checkout@v4
+
       - name: Create issue if pipeline failed
         if: contains(needs.*.result, 'failure')
         uses: peter-evans/create-issue-from-file@v5
@@ -111,27 +126,21 @@ jobs:
           labels: |
             ci
             bug
+
   slack:
     runs-on: ubuntu-latest
     needs: [unit, lint, integration, acceptance, docker]
     if: always()
     steps:
-      - name: Slack notify
-        uses: slackapi/slack-github-action@v1
-        with:
-          payload: |
-            {
-              "text": "CI for *${{ github.repository }}* finished: *${{ needs.docker.result }}* (ref `${{ github.ref_name }}`)\n${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            }
+      - name: Slack notify (skip if no webhook)
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL is not set -> skipping Slack notification"
+            exit 0
+          fi
 
-
-        with:
-          payload: |
-            {
-              "text": "CI for *${{ github.repository }}* finished: *${{ needs.docker.result }}* (ref `${{ github.ref_name }}`) - ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"CI for *${{ github.repository }}* finished: *${{ needs.docker.result }}* (ref `${{ github.ref_name }}`)\n${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "$SLACK_WEBHOOK_URL"
