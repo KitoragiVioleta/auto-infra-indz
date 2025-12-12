@@ -1,0 +1,45 @@
+name: CD (K8s in CI)
+
+on:
+  push:
+    tags: ["v*"]          # деплой по тегу
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kind
+        uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: indz
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Apply namespace
+        run: kubectl apply -f k8s/namespace.yaml
+
+      - name: Set image in manifest
+        run: |
+          IMAGE="ghcr.io/${{ github.repository }}:${{ github.sha }}"
+          sed -i "s|ghcr.io/OWNER/REPO:latest|$IMAGE|g" k8s/deployment.yaml
+
+      - name: Deploy app
+        run: |
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+          kubectl rollout status deployment/indz-app -n prod --timeout=180s
+
+      - name: Deploy monitoring (Prometheus)
+        run: kubectl apply -f k8s/monitoring/prometheus.yaml
+
+      - name: Smoke test inside cluster
+        run: |
+          kubectl run curlpod -n prod --rm -i --restart=Never --image=curlimages/curl -- \
+            curl -sSf http://indz-svc/health

@@ -1,0 +1,15 @@
+{
+  "name": "indz-auto-infra",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "test:unit": "NODE_ENV=test node tests/unit.test.js",
+    "test:integration": "NODE_ENV=test node tests/integration.test.js",
+    "test:acceptance": "NODE_ENV=test node tests/acceptance.test.js",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0"
+  }
+}
