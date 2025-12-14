@@ -2,20 +2,21 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: indz-app
-  namespace: prod
+namespace: monitoring
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: indz
+      app: indz-app
   template:
     metadata:
       labels:
-        app: indz
+        app: indz-app
     spec:
       containers:
-        - name: indz
-          image: ghcr.io/OWNER/REPO:latest
+        - name: indz-app
+          image: indz-app:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
           readinessProbe:
@@ -24,3 +25,9 @@ spec:
               port: 8080
             initialDelaySeconds: 3
             periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
