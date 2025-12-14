@@ -1,4 +1,6 @@
 import http from "node:http";
+import './observability.js';
+
 
 export function handler(req, res) {
   if (req.url === "/health") {
